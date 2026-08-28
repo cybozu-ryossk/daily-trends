@@ -1,0 +1,7 @@
+.trends-work/
+.claude/skills/daily-trends-collect/scripts/.venv/
+_site/
+.jekyll-cache/
+.jekyll-metadata
+.bundle/
+vendor/

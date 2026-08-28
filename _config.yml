@@ -1,0 +1,11 @@
+title: Trends Log
+description: 日々の技術トレンドネタ収集ログ
+theme: minima
+plugins:
+  - jekyll-feed
+show_excerpts: true
+
+header_pages: []
+
+minima:
+  skin: auto
