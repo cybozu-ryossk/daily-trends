@@ -1,6 +1,8 @@
 # trends 出力プロファイル
 
-`/trends` `/trends-detail` `/trends-tune` が「どこに・どの形式で書くか」の判定に使う正本。この GitHub Pages（Jekyll）向けの設定（オリジナルは Obsidian vault 向け。vault 側の `output-profile.md` を差し替えて作られた派生）。
+`daily-trends` `daily-trends-collect` が「どこに・どの形式で書くか」の判定に使う正本。この GitHub Pages（Jekyll）向けの設定。
+
+このリポジトリは全自動運用（Claude Code on the web のスケジュールルーティンから毎朝実行）を前提としており、手動チェックによる絞り込みステップは無い。収集された記事は全件、一覧と詳細要約の両方が1回の書き込みでノートに入る。
 
 ## 保存先
 
@@ -20,13 +22,13 @@
   categories: trends
   ---
   ```
-- 先頭見出し: 付けない（タイトルは frontmatter の `title` が担うため、本文を `##` カテゴリ見出しから始める。Obsidian 版にあった `# YYYY-MM-DD` の本文見出しはここでは不要）
+- 先頭見出し: 付けない（タイトルは frontmatter の `title` が担うため、本文を `##` カテゴリ見出しから始める）
 - カテゴリ見出しレベル: `##`
-- リストアイテム: `- [ ] [日本語タイトル](URL)`（kramdown の GFM 拡張により GitHub Pages 上でチェックボックスとして表示される。ただし静的サイトのため閲覧者側でのクリック操作は状態を保持しない。チェック状態を変えたい場合はこのファイルを編集してコミットする）
+- リストアイテム: `- [日本語タイトル](URL)`（チェックボックスは使わない。全件が自動的に詳細要約まで処理されるため、チェック状態に意味がない）
 - 要約行: リストアイテムの次行に**インデントなしで**フラットに置く（字下げしない）
-- 詳細要約セクション: `## 詳細要約`（新設が必要な場合はカテゴリ別リスト群の末尾に置く） / 記事見出しは `### [日本語タイトル](URL)`
+- 詳細要約セクション: `## 詳細要約`（カテゴリ別リスト群の末尾に置く。**収集された全記事分**を含む） / 記事見出しは `### [日本語タイトル](URL)`
 
-**フォーマット例**:
+**フォーマット例**（一覧と詳細要約を1回の書き込みで完成させる）:
 
 ```markdown
 ---
@@ -38,10 +40,10 @@ categories: trends
 
 ## {カテゴリ名 1}
 
-- [ ] [日本語タイトル](URL)
+- [日本語タイトル](URL)
 記事の内容を1〜2文で要約。業務文脈との接続を含めると良い。
 
-- [ ] [別の日本語タイトル](URL)
+- [別の日本語タイトル](URL)
 別記事の要約。
 
 ## {カテゴリ名 2}
@@ -55,14 +57,16 @@ categories: trends
 - 論点・事実 1
 - 論点・事実 2
 - **業務への示唆**: 業務文脈との接続を1行で
+
+### [別の日本語タイトル](URL)
+
+...
 ```
 
 ## 中間ファイル
 
 - 作業ディレクトリ: `./.trends-work/`（リポジトリルート相対）
-- collect JSON: `./.trends-work/trends-collect-YYYY-MM-DD.json`
-- detail request JSON: `./.trends-work/trends-detail-request-YYYY-MM-DD.json`
-- detail 結果 JSON: `./.trends-work/trends-detail-YYYY-MM-DD.json`
+- collect JSON: `./.trends-work/trends-collect-YYYY-MM-DD.json`（一覧用の要約と詳細要約の両方を含む。`daily-trends-collect` の出力）
 
 `.trends-work/` は `.gitignore` 対象（コミットしない中間ファイル）。
 
@@ -74,8 +78,9 @@ categories: trends
 
 - このリポジトリは GitHub Pages（Jekyll, `minima` テーマ）で公開されている
 - `_posts/` にファイルを追加・コミット・push すると、GitHub 側で自動ビルドされサイトに反映される（数十秒〜数分のタイムラグあり）
-- Claude Code on the web からこのリポジトリに対して `/trends` 等のスキルを実行した場合も、変更をコミット・push するところまで行うこと（push しないとサイトに反映されない）
+- Claude Code on the web からこのリポジトリに対して `/daily-trends` を実行した場合も、変更をコミット・push するところまで行うこと（push しないとサイトに反映されない）
 
 ## vault 版との違い・運用上の注意
 
-- `~/vault`（Obsidian）にも同名スキル一式がある。`interests.md`（収集プロファイル）はこのリポジトリと vault 側とで別ファイルとして存在する。`/trends-tune` を実行した場合、適用先は実行時のカレントディレクトリ（＝このリポジトリ内の `interests.md`）のみ。vault 側と定期的に見比べて手動で同期するか、どちらか一方に運用を一本化することを検討する
+- `~/vault`（Obsidian）にも `daily-trends` 系スキル一式があるが、そちらは「収集→一覧をノートに書く→ユーザーが興味のある記事をチェック→チェック済みだけ詳細取得」という手動キュレーション込みの運用（`daily-trends-detail` 等の追加スキルを使う）。このリポジトリは無人実行が前提のため、そのステップを省いて全件を自動で詳細要約まで行う設計にしている
+- そのため `interests.md`（収集の興味プロファイル）のチューニングもこのリポジトリ単体では行わない（チェック履歴という学習信号が存在しないため）。興味プロファイルを見直したい場合は vault 側で `/trends-tune` を実行し、更新後の `interests.md` をこのリポジトリの `.claude/skills/daily-trends-collect/interests.md` に手動で反映する
