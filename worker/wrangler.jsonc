@@ -1,0 +1,12 @@
+{
+  "name": "daily-trends-interests-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daily-trends-interests",
+      "database_id": "028f3a19-16a7-4f9f-a463-af790022abef"
+    }
+  ]
+}

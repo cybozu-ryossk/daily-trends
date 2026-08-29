@@ -73,7 +73,8 @@ categories: trends
 
 ## 収集プロファイルの場所
 
-- `../collect/interests.md`（興味領域・収集ソース・カテゴリ粒度・業務文脈）
+- 興味領域・収集ソース: Cloudflare D1 + Worker API（`https://daily-trends-interests-api.gooodev.workers.dev/`）
+- 業務文脈・収集上限・カテゴリ粒度メモ: `../collect/guidance.md`
 
 ## 公開の仕組み
 
@@ -85,4 +86,4 @@ categories: trends
 ## vault 版との違い・運用上の注意
 
 - `~/vault`（Obsidian）にも同種のスキル一式があるが、そちらは「収集→一覧をノートに書く→ユーザーが興味のある記事をチェック→チェック済みだけ詳細取得」という手動キュレーション込みの運用（`daily-trends-detail` 等の追加スキルを使う）。このリポジトリは無人実行が前提のため、そのステップを省いて全件を自動で詳細要約まで行う設計にしている
-- そのため `interests.md`（収集の興味プロファイル）のチューニングもこのリポジトリ単体では行わない（チェック履歴という学習信号が存在しないため）。興味プロファイルを見直したい場合は vault 側で `/trends-tune` を実行し、更新後の `interests.md` をこのリポジトリの `.claude/skills/collect/interests.md` に手動で反映する
+- 興味プロファイル（興味領域・収集ソース）はこのリポジトリでは Cloudflare D1 + Worker API を正本としており、vault 側の `interests.md`（ファイルベース）とはデータ源が異なる。vault 側の `/trends-tune` はチェック履歴からファイルを更新するだけで D1 には反映されない。D1 側を見直したい場合は `db/schema.sql` `db/seed.sql`（またはリポジトリの `wrangler d1 execute` コマンド）で直接更新する

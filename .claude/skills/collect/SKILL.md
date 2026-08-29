@@ -17,41 +17,49 @@ description: "トレンドネタ収集（収集レイヤー）。はてブ・Hac
 
 ### 0. 収集プロファイル読み込み
 
-このスキルと同じディレクトリの `interests.md` を読み込む。興味領域・収集ソース・カテゴリ粒度・業務文脈の正本。
+興味領域（興味フラグ）と収集ソース一覧は Cloudflare D1 + Worker API から取得する（このリポジトリ単体の設定ファイルではなく外部ストア）:
 
-- 興味領域「コア」「上昇中」→ ★★★ 判定の基準
-- 「監視中」→ 該当記事は ★★ として拾う
-- 「収集抑制」→ 原則採用しない
+```bash
+curl -s https://daily-trends-interests-api.gooodev.workers.dev/
+```
+
+レスポンス形式は `{ "flags": [...], "sources": [...] }`。
+
+- `flags[]`: `{ label, tier, notes, updated_at }`。`tier` が `core` / `rising` → ★★★ 判定の基準、`watching` → ★★、`suppressed` → 原則不採用（`label` がトピック名、`notes` に補足説明）
+- `sources[]`: `{ group_name, source_type, url, label, enabled, notes, updated_at }`。無効化されたソース（除外・停止中）は API 側で既に除かれており `enabled=1` のみ返る。`group_name` でソース種別グループ（はてブIT / Hacker News / 生成AI・研究 / セキュリティブログ・研究 / エンタープライズIT / モダンデータスタック / JavaScript/TypeScriptエコシステム / インフラ・DevOps / Redditサブレッド / 日本発信）を判定し、`source_type` で取得方法（`hatena` / `hn` / `blog` / `hf-papers` / `reddit` / `script-zenn` / `script-qiita`）を判定する。`url` が対象URL（Reddit のみ `r/サブレッド名` 形式）
+
+加えて、このスキルと同じディレクトリの `guidance.md`（業務文脈・収集上限・カテゴリ粒度メモ）を読み込む。
+
+サンドボックス環境では curl が名前解決に失敗することがある。その場合は `dangerouslyDisableSandbox: true` で実行する。API が応答しない場合はその旨を報告して中断する（ローカルへのフォールバックは無い）。
 
 ### 1. トレンド情報の収集（一覧取得）
 
-`interests.md` の「## 収集ソース」に列挙されたソースから最新のトレンド情報を取得する（「除外・停止中ソース」は収集しない）。この段階ではタイトル・URL・シグナル値（ブックマーク数/ポイント数/ups 等）の軽量な一覧取得のみを行う（本文取得は手順 4 でまとめて行う）。ソース種別ごとの取得方法：
+手順 0 で取得した `sources` から最新のトレンド情報を取得する。この段階ではタイトル・URL・シグナル値（ブックマーク数/ポイント数/ups 等）の軽量な一覧取得のみを行う（本文取得は手順 4 でまとめて行う）。`group_name` ごとの取得方法：
 
-**日本市場（はてブ IT）**
+**はてブIT**（`source_type: hatena`）
 
-- interests.md 記載のカテゴリ URL を巡回
+- 各ソースの `url`（カテゴリ URL）を巡回
 - 各エントリーの**タイトル、元記事 URL、ブックマーク数**を必ず取得すること
 - はてブのエントリーページ URL ではなく、リンク先の元記事 URL を抽出
 
-**グローバル（Hacker News）**
+**Hacker News**（`source_type: hn`）
 
 - 各記事の**タイトル、HN コメントページ URL（`https://news.ycombinator.com/item?id=XXXXX`形式）、ポイント数**を取得
 - **元記事 URL ではなく HN のコメントページ URL を使用すること**（コメントも確認できるようにするため）
 - **タイトルは日本語に翻訳して出力**
 
-**セキュリティブログ**
+**セキュリティブログ・研究**（`source_type: blog`、`group_name: セキュリティブログ・研究`）
 
-- interests.md 記載の各ブログの最新 1-3 記事をチェックし、興味度 ★★★ のものがあれば注目トピックに含める
+- 各ブログの最新 1-3 記事をチェックし、興味度 ★★★ のものがあれば注目トピックに含める
 
-**エンタープライズ IT**
+**エンタープライズIT**（`source_type: blog`、`group_name: エンタープライズIT`）
 
-- interests.md 記載の各サイトのトップ・新着から記事を取得
+- 各サイトのトップ・新着から記事を取得
 
-**Reddit**
+**Redditサブレッド**（`source_type: reddit`）
 
-- interests.md 記載のサブレッドを巡回
 - **重要**: WebFetch ツールは reddit.com をブロックするため、**Bash ツールで curl コマンドを使用**すること
-- 各サブレッドから `/hot.json?t=day&limit=10` で上位 10 件を取得
+- 各 `url`（`r/サブレッド名` 形式）から `/hot.json?t=day&limit=10` で上位 10 件を取得
 - **www.reddit.com を使用**（old.reddit.com は 403 エラーが返されるため）
 - User-Agent ヘッダーを設定: `"User-Agent: neta-trend-collector/1.0 (trend analysis tool)"`
 - 各記事の**タイトル、Reddit コメントページの完全 URL、投票数（ups）、コメント数**を取得
@@ -72,26 +80,24 @@ curl -s -H "User-Agent: neta-trend-collector/1.0 (trend analysis tool)" \
 - `data.children[].data.num_comments`: コメント数
 - `data.children[].data.permalink`: パス（`https://www.reddit.com` + permalink で完全 URL）
 
-**生成 AI・研究**
+**生成AI・研究**（`source_type: blog`、`group_name: 生成AI・研究`）
 
-- interests.md 記載の各ブログから最新記事を WebFetch で取得
-- Hugging Face（ブログ）、Anthropic、OpenAI、Google DeepMind のブログは WebFetch で取得
-- Hugging Face Papers（AI/ML 論文の日次トレンド）は **Python スクリプト** `scripts/fetch_hf_papers.py` で取得
+- 各ブログの最新記事を WebFetch で取得
 - タイトルは日本語。英語記事は翻訳して掲載
 
-**セキュリティブログ・研究（強化版）**
+**生成AI・研究 / Hugging Face Papers**（`source_type: hf-papers`）
 
-- Cloudflare、NCC Group、Trail of Bits も追加。各ブログの最新 2-3 記事を取得
+- AI/ML 論文の日次トレンドを **Python スクリプト** `scripts/fetch_hf_papers.py` で取得
 
-**モダンデータスタック**
+**モダンデータスタック**（`source_type: blog`、`group_name: モダンデータスタック`）
 
-- dbt Blog、Databricks ブログは WebFetch で取得
+- 各ブログを WebFetch で取得
 
-**JavaScript/TypeScript・インフラ**
+**JavaScript/TypeScriptエコシステム・インフラ・DevOps**（`source_type: blog`）
 
-- TypeScript、Node.js、Deno、Astro、Kubernetes、CNCF、Docker の公式ブログは WebFetch で取得
+- 各公式ブログを WebFetch で取得
 
-**日本発信（Zenn・Qiita）**
+**日本発信（Zenn・Qiita）**（`source_type: script-zenn` / `script-qiita`）
 
 - Zenn: **Python スクリプト** `scripts/fetch_zenn.py` で「ai」「typescript」「dataengineering」タグの記事取得（RSS フィード経由）
 - Qiita: **Python スクリプト** `scripts/fetch_qiita.py` で直近の人気記事取得（Qiita API は sort パラメータに対応していないため、直近数日分を取得しいいね数でスクリプト側でソート）
@@ -104,9 +110,9 @@ curl -s -H "User-Agent: neta-trend-collector/1.0 (trend analysis tool)" \
 
 **興味領域マッチング（最優先）**
 
-- 各記事を interests.md の興味領域と照合し、関連度を評価
-- 「コア」「上昇中」に該当する記事を最上位に配置（`interest: 3`）
-- 「収集抑制」に該当する記事は関連度を下げる（`interest: 1`。原則不採用）
+- 各記事を手順 0 で取得した `flags` と照合し、関連度を評価
+- `tier: core` / `rising` に該当する記事を最上位に配置（`interest: 3`）
+- `tier: suppressed` に該当する記事は関連度を下げる（`interest: 1`。原則不採用）
 
 **はてブ IT**
 
@@ -136,12 +142,12 @@ curl -s -H "User-Agent: neta-trend-collector/1.0 (trend analysis tool)" \
 - 例: 「Qwen 3.7 発表（gigazine）」と「Qwen 3.7 reddit 反応」→ 1 件
 - 似ているが事案が違う場合（例: NGINX 0-day と Defender 0-day）は別項目のまま残す
 
-代表記事の選び方（優先順）: 1. 日本語ソース 2. 一次情報・公式発表 3. より詳細・深掘りされている方 4. 業務文脈（interests.md の「## 業務文脈」）で参照しやすい方。統合された他記事の要点は代表記事の要約に 1〜2 句だけ織り込み、URL は `merged_urls` に記録する。
+代表記事の選び方（優先順）: 1. 日本語ソース 2. 一次情報・公式発表 3. より詳細・深掘りされている方 4. 業務文脈（`guidance.md` の「## 業務文脈」）で参照しやすい方。統合された他記事の要点は代表記事の要約に 1〜2 句だけ織り込み、URL は `merged_urls` に記録する。
 
-**件数確定**: 全エントリーは載せない。interests.md の「## 収集上限」を目安に、関連性の高い記事のみに絞り込む。ここで**公開する記事リストを確定する**（手順 4 の本文取得はこの確定リストに対してのみ行う。無駄な取得を避けるため、絞り込み前の候補全件には行わない）。
+**件数確定**: 全エントリーは載せない。`guidance.md` の「## 収集上限」を目安に、関連性の高い記事のみに絞り込む。ここで**公開する記事リストを確定する**（手順 4 の本文取得はこの確定リストに対してのみ行う。無駄な取得を避けるため、絞り込み前の候補全件には行わない）。
 
 - **ソース横断のカテゴリ別**にする。はてブ / HN / Reddit / Aikido / Wiz など全ソースを 1 つのカテゴリにまとめる
-- カテゴリ粒度は**中粒度**。カテゴリ例と細分化・統合の指示は interests.md の「カテゴリ粒度メモ」に従う
+- カテゴリ粒度は**中粒度**。カテゴリ例と細分化・統合の指示は `guidance.md` の「カテゴリ粒度メモ」に従う
 - カテゴリは固定リストではない。当日の記事に合わせて適切に切る。1 カテゴリ 2〜3 件しか無いなら近接カテゴリに統合してよい
 - 記事の並び順がそのまま出力順（カテゴリ順→記事順）になる。カテゴリ順は関連性の高いものから（ユーザー興味領域に直結するカテゴリを上に）
 
@@ -161,7 +167,7 @@ curl -s -H "User-Agent: neta-trend-collector/1.0 (trend analysis tool)" \
 
 - `summary_ja`（1〜2 文）: 記事内容のサマリ。何が書かれているか・なぜ重要か（業務文脈との接続）を端的に。タイトルの繰り返しは禁止
 - `bullets`（5〜8 点）: 記事の主要な論点・事実。数字・固有名詞（製品名・企業名・バージョン・CVE 番号等）は具体的に保持する。タイトルの繰り返しは禁止
-- `implication`（1 文）: 業務への示唆。`interests.md` の「## 業務文脈」を参照し、プリセールス・顧客提案・kintone・エンタープライズ・生成AI活用などの文脈と接続する
+- `implication`（1 文）: 業務への示唆。`guidance.md` の「## 業務文脈」を参照し、プリセールス・顧客提案・kintone・エンタープライズ・生成AI活用などの文脈と接続する
 
 `fetch_status`: `ok`（本文取得成功）/ `fallback`（補完元から要約）/ `failed`（本文取得失敗・簡潔な要約のみ）。`note`: 補完元の注記が必要なときだけ記載、無ければ空文字列。
 
@@ -216,7 +222,7 @@ curl -s -H "User-Agent: neta-trend-collector/1.0 (trend analysis tool)" \
 - 要約文（`summary_ja` / `bullets` / `implication`）は通常の日本語で書く（圧縮口調にしない）。英語記事も要約は日本語
 - 投票数（ups）/コメント数が高い記事を優先（**指標自体は JSON に載せない**。重要度判定のためだけに使う）
 - ポイント数/ブックマーク数が高い記事は特に注目
-- **サンドボックス環境の注意**: Bash の curl（Reddit）や Python スクリプト（HF Papers・Zenn・Qiita）はサンドボックスのネットワーク制限で名前解決に失敗することがある。その場合は `dangerouslyDisableSandbox: true` で実行する
+- **サンドボックス環境の注意**: Bash の curl（interests API・Reddit）や Python スクリプト（HF Papers・Zenn・Qiita）はサンドボックスのネットワーク制限で名前解決に失敗することがある。その場合は `dangerouslyDisableSandbox: true` で実行する
 - カテゴリは中粒度・ソース横断。当日の記事に合わせて 5〜10 個程度に切る
 - **同一事案を扱う複数記事は手順 3 の重複統合で代表 1 件にまとめる**（件数確定前に必須）
 - **本文取得（手順 4）は件数確定後の公開リストに対してのみ行う**。絞り込み前の候補全件に対しては行わない（無駄なアクセスを避けるため）
