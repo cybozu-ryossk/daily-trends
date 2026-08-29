@@ -13,6 +13,9 @@
 		<div class="mx-auto flex w-full max-w-3xl items-center gap-2 px-4">
 			<Icon icon="mdi:trending-up" class="text-primary text-2xl" />
 			<span class="text-lg font-bold">Daily Trends</span>
+			<a href="{base}/admin" class="btn btn-ghost btn-sm btn-circle ml-auto" aria-label="興味プロファイル管理">
+				<Icon icon="mdi:cog-outline" />
+			</a>
 		</div>
 	</div>
 
