@@ -14,8 +14,8 @@
 		type Source,
 		type Tier
 	} from '$lib/interestsApi';
+	import { getStoredToken, setStoredToken, clearStoredToken } from '$lib/auth';
 
-	const TOKEN_KEY = 'daily-trends-admin-token';
 	const TIERS: Tier[] = ['core', 'rising', 'watching', 'suppressed'];
 	const TIER_LABEL: Record<Tier, string> = {
 		core: 'コア',
@@ -38,12 +38,7 @@
 	});
 	let newSource = $state({ group_name: '', source_type: 'blog', url: '', label: '' });
 
-	try {
-		const stored = localStorage.getItem(TOKEN_KEY);
-		if (stored) token = stored;
-	} catch {
-		// localStorage unavailable (private browsing etc.) — just skip auto-login
-	}
+	token = getStoredToken();
 
 	$effect(() => {
 		if (token) load();
@@ -73,11 +68,7 @@
 		const trimmed = tokenInput.trim();
 		if (!trimmed) return;
 		token = trimmed;
-		try {
-			localStorage.setItem(TOKEN_KEY, token);
-		} catch {
-			// ignore
-		}
+		setStoredToken(token);
 	}
 
 	function logout() {
@@ -85,11 +76,7 @@
 		tokenInput = '';
 		flags = [];
 		sources = [];
-		try {
-			localStorage.removeItem(TOKEN_KEY);
-		} catch {
-			// ignore
-		}
+		clearStoredToken();
 	}
 
 	async function addFlag() {

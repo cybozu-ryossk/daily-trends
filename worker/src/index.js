@@ -125,6 +125,51 @@ export default {
 			}
 		}
 
+		// Public read: which article URLs on a given day are marked interesting.
+		// Anyone can read (harmless), only the token holder can write.
+		if (method === "GET" && path === "/marks") {
+			const date = url.searchParams.get("date");
+			if (!date) return json({ error: "date query param is required" }, { status: 400 });
+			const rows = await env.DB.prepare("SELECT url FROM article_marks WHERE date = ?")
+				.bind(date)
+				.all();
+			return json({ urls: rows.results.map((r) => r.url) });
+		}
+
+		// --- article marks (per-article "興味あり" star) ---
+		if (path === "/admin/marks") {
+			if (!isAuthorized(request, env)) return json({ error: "unauthorized" }, { status: 401 });
+
+			if (method === "POST") {
+				const body = await readJson(request);
+				if (!body) return json({ error: "invalid JSON body" }, { status: 400 });
+				const { date, url: articleUrl, title_ja = "" } = body;
+				if (!date || !articleUrl) {
+					return json({ error: "date and url are required" }, { status: 400 });
+				}
+				const result = await env.DB.prepare(
+					`INSERT INTO article_marks (date, url, title_ja) VALUES (?, ?, ?)
+					 ON CONFLICT(date, url) DO UPDATE SET title_ja = excluded.title_ja
+					 RETURNING *`
+				)
+					.bind(date, articleUrl, title_ja)
+					.first();
+				return json(result, { status: 201 });
+			}
+
+			if (method === "DELETE") {
+				const date = url.searchParams.get("date");
+				const articleUrl = url.searchParams.get("url");
+				if (!date || !articleUrl) {
+					return json({ error: "date and url query params are required" }, { status: 400 });
+				}
+				await env.DB.prepare("DELETE FROM article_marks WHERE date = ? AND url = ?")
+					.bind(date, articleUrl)
+					.run();
+				return new Response(null, { status: 204, headers: CORS_HEADERS });
+			}
+		}
+
 		// --- sources CRUD ---
 		const sourceMatch = path.match(/^\/admin\/sources(?:\/(\d+))?$/);
 		if (sourceMatch) {

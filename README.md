@@ -15,11 +15,12 @@ Claude Code（ローカル・Claude Code on the web どちらでも）でこの�
 ## 構成
 
 - `site/`: SvelteKit 製フロントエンド（Vite + Tailwind CSS + daisyUI + Iconify、`@sveltejs/adapter-static` で静的書き出し）
-  - `site/src/lib/data/*.json`: 日別のトレンドデータ（一覧＋詳細要約を含む）。ホームで日付一覧、`/[date]` で当日分を表示
+  - `site/src/lib/data/*.json`: 日別のトレンドデータ（一覧＋詳細要約を含む）。ホームで日付一覧、`/[date]` で当日分を表示。各記事に「興味あり」の星ボタンあり
+  - `site/src/routes/admin/`: 興味プロファイル（情報ソース・興味フラグ）の管理 UI（トークン認証）
 - `.claude/skills/output/`: 出力レイヤー（収集 JSON を `site/src/lib/data/` に書き込む）
 - `.claude/skills/collect/`: 収集レイヤー（巡回・重複統合・興味度判定に加え、公開対象全件の本文取得・詳細要約生成まで行う）。`guidance.md` に業務文脈・収集上限・カテゴリ粒度メモを置く（興味領域・収集ソース自体は D1 側）
 - `.trends-work/`（gitignore 対象）: 収集の中間 JSON
-- `db/`: 興味プロファイル（興味フラグ・収集ソース）を保持する Cloudflare D1 のスキーマ・シード（`schema.sql` / `seed.sql`）
+- `db/`: Cloudflare D1 のスキーマ・シード。`schema.sql`/`seed.sql`（興味フラグ・情報ソース）、`schema_marks.sql`（記事ごとの「興味あり」マーク用テーブル、追加分）
 - `worker/`: D1 の内容を JSON で返す Cloudflare Worker（`daily-trends-interests-api`）のソース
 - `.github/workflows/deploy.yml`: push 時に `site/` をビルドし GitHub Pages にデプロイする GitHub Actions
 
@@ -30,15 +31,19 @@ Claude Code（ローカル・Claude Code on the web どちらでも）でこの�
 
 ## 興味プロファイル（Cloudflare D1）
 
-興味領域（興味フラグ）と収集ソースの一覧は、リポジトリ内のファイルではなく Cloudflare D1 データベース `daily-trends-interests` で管理する。`collect` は起動時に `https://daily-trends-interests-api.gooodev.workers.dev/`（Worker 経由の読み取り専用 JSON API）から取得する。
+興味領域（興味フラグ）と収集ソースの一覧は、リポジトリ内のファイルではなく Cloudflare D1 データベース `daily-trends-interests` で管理する。`collect` は起動時に `https://daily-trends-interests-api.gooodev.workers.dev/interests`（認証不要の読み取り専用 JSON API）から取得する。
 
-更新する場合:
+管理は `/admin` ページ（サイト右上の歯車アイコン）から行う。初回だけ管理トークン（Worker のシークレット `ADMIN_TOKEN`）をブラウザに入力すればよい（以後は localStorage に保存され、`/[date]` ページの「興味あり」ボタンの認証にも共用される）。トークンを忘れた・再発行したい場合:
 
 ```bash
-cd worker && pnpm exec wrangler d1 execute daily-trends-interests --remote --command "UPDATE ..."
+cd worker && pnpm exec wrangler secret put ADMIN_TOKEN
 ```
 
-または `db/seed.sql` を編集して再実行する。Worker 自体を変更した場合は `cd worker && pnpm exec wrangler deploy` で再デプロイする。
+管理 UI を使わず直接更新したい場合は `db/seed.sql` を編集して `wrangler d1 execute` で再実行するか、`wrangler d1 execute daily-trends-interests --remote --command "..."` を直接叩く。Worker 自体を変更した場合は `cd worker && pnpm exec wrangler deploy` で再デプロイする。
+
+## 記事の「興味あり」マーク
+
+各日のページで記事ごとに星ボタンを押すと、`article_marks` テーブル（D1、`db/schema_marks.sql`）に `(date, url)` の組で保存される。読み取り（星の表示）は誰でも見られるが、書き込みは `/admin` と同じ `ADMIN_TOKEN` が必要（星ボタン自体、未ログイン時は非表示になる — 既にマーク済みの記事だけ読み取り専用で表示される）。
 
 ## 注意
 
