@@ -1,11 +1,11 @@
 ---
 name: output
-description: "トレンドネタ収集（出力レイヤー）。収集済み JSON（一覧+全件の詳細要約を含む）を出力プロファイルの形式に整形し、1回の書き込みで投稿ノートに出力する。収集・詳細要約自体は collect が行う。"
+description: "トレンドネタ収集（出力レイヤー）。収集済み JSON（一覧+全件の詳細要約を含む）を出力プロファイルの形式に整形し、SvelteKit サイトのデータファイルへ1回の書き込みで出力する。収集・詳細要約自体は collect が行う。"
 ---
 
 # トレンドネタ収集（出力レイヤー）
 
-`collect` が集めた記事情報（一覧用の短い要約と、全記事分の詳細要約の両方を含む）を、`output-profile.md`（このスキルと同じディレクトリ）に従ってノートへ書き込む。ソース巡回・興味度判定・重複統合・本文取得などの収集ロジックは持たない（`collect` の責務）。
+`collect` が集めた記事情報（一覧用の短い要約と、全記事分の詳細要約の両方を含む）を、`output-profile.md`（このスキルと同じディレクトリ）に従って `site/src/lib/data/YYYY-MM-DD.json` へ書き込む。ソース巡回・興味度判定・重複統合・本文取得などの収集ロジックは持たない（`collect` の責務）。
 
 ## 実行手順
 
@@ -15,27 +15,19 @@ description: "トレンドネタ収集（出力レイヤー）。収集済み JS
 
 ### 2. 収集 JSON の取得
 
-`output-profile.md` に記載の中間ファイル作業ディレクトリ配下の `trends-collect-YYYY-MM-DD.json`（当日分）を探す。
+`output-profile.md` に記載の中間ファイル作業ディレクトリ配下の `trends-collect-YYYY-MM-DD.json`（当日分、日本時間基準）を探す。
 
 - 既に存在する → そのまま読み込む
 - 存在しない → `collect` スキルを起動して生成させてから読み込む
 
 ### 3. 書き込み（一覧＋詳細を1回で）
 
-まず「ネタ収集完了。」というメッセージを返してから、`output-profile.md` の保存先確定ルールに従って**一度の書き込みで**投稿ファイルを完成させる。
+まず「ネタ収集完了。」というメッセージを返してから、`output-profile.md` の「変換ルール」に従って `collect` のフラットな `items` 配列を `categories` でグルーピングした JSON に変換し、`site/src/lib/data/YYYY-MM-DD.json` へ**一度の書き込みで**出力する。
 
-**一覧セクション**:
-
-- 収集 JSON の `items` を先頭から順に処理する（配列順 = カテゴリ順→記事順）
-- 各カテゴリの初出時に `##` 見出しを起こす
-- 各記事は `output-profile.md` のフォーマット例どおり `- [title_ja](url)` + 次行に `summary_ja` をインデントなしで書く
-- `interest` / `merged_urls` / `bullets` / `implication` / `fetch_status` / `note` などの内部フィールドはこのセクションには出さない
-
-**詳細要約セクション**:
-
-- 一覧セクションの後に `## 詳細要約` を起こし、`items` を同じ順序で再度たどって**全記事分**を書く（チェック状態のような絞り込みは存在しない。収集JSONに載っている記事は全件がここに入る）
-- 各記事は `### [title_ja](url)` 見出し＋ `bullets` を箇条書き＋最後に `- **業務への示唆**: {implication}`
-- `fetch_status` が `fallback` または `note` が空でない場合は、箇条書きの末尾に `note` の内容を反映する
+- `items` を先頭から順に処理する（配列順 = カテゴリ順→記事順のまま維持）
+- 同じ `category` の記事をひとつの `categories[].items` にまとめる
+- 各記事は `title_ja` / `url` / `summary_ja` / `bullets` / `implication` のみを転記する（チェック状態のような絞り込みは存在しない。収集 JSON に載っている記事は全件がここに入る）
+- `interest` / `merged_urls` / `fetch_status` / `note` は出力に含めない。ただし `fetch_status: "fallback"` または `note` が空でない場合は、その記事の `bullets` の末尾にひとつの項目として注記を足してから `note` 自体は落とす
 
 ## 注意事項
 
@@ -43,4 +35,5 @@ description: "トレンドネタ収集（出力レイヤー）。収集済み JS
 - 収集 JSON が壊れている・`items` が空などの場合は、その旨を報告して書き込みを中断する
 - 見出し・要約の本文は通常の日本語で書く（圧縮口調にしない）
 - 1 回の実行で収集 JSON の全件を書き込む（件数が多くても省略しない）
+- 書き込み後に `site/src/lib/data/YYYY-MM-DD.json` が妥当な JSON であることを確認する（例: `python3 -c "import json; json.load(open('site/src/lib/data/YYYY-MM-DD.json'))"`）
 - **無人実行が前提**（スケジュールルーティンから起動される）。`collect` の呼び出しを含め、全工程を同一ターン内・同一セッションで同期的に完了させること。Agent ツール等でバックグラウンドの subagent に処理を委譲してターンを終了してはいけない（ルーティンのセッションはそのターンの完了をもって「成功」扱いになるため、委譲した subagent がその後に出す結果は誰にも回収されず失われる）
