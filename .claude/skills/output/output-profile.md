@@ -1,6 +1,6 @@
 # trends 出力プロファイル
 
-`daily-trends` `daily-trends-collect` が「どこに・どの形式で書くか」の判定に使う正本。この GitHub Pages（Jekyll）向けの設定。
+`output` `collect` が「どこに・どの形式で書くか」の判定に使う正本。この GitHub Pages（Jekyll）向けの設定。
 
 このリポジトリは全自動運用（Claude Code on the web のスケジュールルーティンから毎朝実行）を前提としており、手動チェックによる絞り込みステップは無い。収集された記事は全件、一覧と詳細要約の両方が1回の書き込みでノートに入る。
 
@@ -8,6 +8,7 @@
 
 - 保存先ディレクトリ: `_posts/`（リポジトリルート相対。Jekyll の投稿ディレクトリ）
 - ファイル名: `YYYY-MM-DD-trends.md`（Jekyll の投稿命名規則。日付プレフィックスは必須）
+- **日付は日本時間（Asia/Tokyo, UTC+9）基準**で判定する。実行環境のシステム時刻は UTC のため、素の `date` コマンドをそのまま使わないこと。`TZ=Asia/Tokyo date +%Y-%m-%d` で計算する（スケジュールルーティンは UTC 22:00 = 日本時間翌朝7:00 に起動するため、UTC のまま判定すると投稿日付が1日ずれる）
 - 既存ファイルがある場合: ファイル末尾に追記
 - ファイルが無い場合: 新規作成
 
@@ -66,21 +67,22 @@ categories: trends
 ## 中間ファイル
 
 - 作業ディレクトリ: `./.trends-work/`（リポジトリルート相対）
-- collect JSON: `./.trends-work/trends-collect-YYYY-MM-DD.json`（一覧用の要約と詳細要約の両方を含む。`daily-trends-collect` の出力）
+- collect JSON: `./.trends-work/trends-collect-YYYY-MM-DD.json`（一覧用の要約と詳細要約の両方を含む。`collect` の出力。ファイル名の日付も日本時間基準）
 
 `.trends-work/` は `.gitignore` 対象（コミットしない中間ファイル）。
 
 ## 収集プロファイルの場所
 
-- `../daily-trends-collect/interests.md`（興味領域・収集ソース・カテゴリ粒度・業務文脈）
+- `../collect/interests.md`（興味領域・収集ソース・カテゴリ粒度・業務文脈）
 
 ## 公開の仕組み
 
 - このリポジトリは GitHub Pages（Jekyll, `minima` テーマ）で公開されている
 - `_posts/` にファイルを追加・コミット・push すると、GitHub 側で自動ビルドされサイトに反映される（数十秒〜数分のタイムラグあり）
-- Claude Code on the web からこのリポジトリに対して `/daily-trends` を実行した場合も、変更をコミット・push するところまで行うこと（push しないとサイトに反映されない）
+- Claude Code on the web からこのリポジトリに対して `/output` を実行した場合も、変更をコミット・push するところまで行うこと（push しないとサイトに反映されない）
+- **全工程を1回のセッション内で同期的に完了させること**。バックグラウンドの subagent に処理を委譲してターンを終了すると、スケジュールルーティンはそのターンの完了時点で「成功」扱いになり、委譲先が後から出す結果は誰にも回収されない
 
 ## vault 版との違い・運用上の注意
 
-- `~/vault`（Obsidian）にも `daily-trends` 系スキル一式があるが、そちらは「収集→一覧をノートに書く→ユーザーが興味のある記事をチェック→チェック済みだけ詳細取得」という手動キュレーション込みの運用（`daily-trends-detail` 等の追加スキルを使う）。このリポジトリは無人実行が前提のため、そのステップを省いて全件を自動で詳細要約まで行う設計にしている
-- そのため `interests.md`（収集の興味プロファイル）のチューニングもこのリポジトリ単体では行わない（チェック履歴という学習信号が存在しないため）。興味プロファイルを見直したい場合は vault 側で `/trends-tune` を実行し、更新後の `interests.md` をこのリポジトリの `.claude/skills/daily-trends-collect/interests.md` に手動で反映する
+- `~/vault`（Obsidian）にも同種のスキル一式があるが、そちらは「収集→一覧をノートに書く→ユーザーが興味のある記事をチェック→チェック済みだけ詳細取得」という手動キュレーション込みの運用（`daily-trends-detail` 等の追加スキルを使う）。このリポジトリは無人実行が前提のため、そのステップを省いて全件を自動で詳細要約まで行う設計にしている
+- そのため `interests.md`（収集の興味プロファイル）のチューニングもこのリポジトリ単体では行わない（チェック履歴という学習信号が存在しないため）。興味プロファイルを見直したい場合は vault 側で `/trends-tune` を実行し、更新後の `interests.md` をこのリポジトリの `.claude/skills/collect/interests.md` に手動で反映する
